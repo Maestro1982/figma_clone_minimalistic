@@ -11,7 +11,7 @@ const workSans = Work_Sans({
 });
 
 export const metadata: Metadata = {
-  title: 'Figma Clone',
+  title: 'Figma Minimalistic',
   description:
     'A minimalistic Figma clone using fabric.js and Liveblocks for real-time collaboration',
 };

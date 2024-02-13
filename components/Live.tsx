@@ -4,35 +4,38 @@ import {
   useBroadcastEvent,
   useEventListener,
   useMyPresence,
-  useOthers,
 } from '@/liveblocks.config';
-import { CursorMode, CursorState, Reaction, ReactionEvent } from '@/types/type';
+import { CursorMode, CursorState, Reaction } from '@/types/type';
 import useInterval from '@/hooks/useInterval';
+import { shortcuts } from '@/constants';
 
 import LiveCursors from '@/components/cursor/LiveCursors';
 import CursorChat from '@/components/cursor/CursorChat';
 import ReactionSelector from '@/components/reaction/ReactionButton';
 import FlyingReaction from '@/components/reaction/FlyingReaction';
+import { Comments } from '@/components/comments/Comments';
+
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
 
 type Props = {
   canvasRef: React.MutableRefObject<HTMLCanvasElement | null>;
+  undo: () => void;
+  redo: () => void;
 };
 
-const Live = ({ canvasRef }: Props) => {
-  /**
-   * useOthers returns the list of other users in the room.
-   *
-   * useOthers: https://liveblocks.io/docs/api-reference/liveblocks-react#useOthers
-   */
-  const others = useOthers();
-
+const Live = ({ canvasRef, undo, redo }: Props) => {
   /**
    * useMyPresence returns the presence of the current user in the room.
    * It also returns a function to update the presence of the current user.
    *
    * useMyPresence: https://liveblocks.io/docs/api-reference/liveblocks-react#useMyPresence
    */
-  const [{ cursor }, updateMyPresence] = useMyPresence() as any;
+  const [{ cursor }, updateMyPresence] = useMyPresence();
 
   /**
    * useBroadcastEvent is used to broadcast an event to all the other users in the room.
@@ -99,7 +102,7 @@ const Live = ({ canvasRef }: Props) => {
    * useEventListener: https://liveblocks.io/docs/api-reference/liveblocks-react#useEventListener
    */
   useEventListener((eventData) => {
-    const event = eventData.event as ReactionEvent;
+    const event = eventData.event;
     setReactions((reactions) =>
       reactions.concat([
         {
@@ -178,6 +181,38 @@ const Live = ({ canvasRef }: Props) => {
     );
   }, [cursorState.mode, setCursorState]);
 
+  // trigger respective actions when the user clicks on the right menu
+  const handleContextMenuClick = useCallback(
+    (key: string) => {
+      switch (key) {
+        case 'Chat':
+          setCursorState({
+            mode: CursorMode.Chat,
+            previousMessage: null,
+            message: '',
+          });
+          break;
+
+        case 'Reactions':
+          setCursorState({ mode: CursorMode.ReactionSelector });
+          break;
+
+        case 'Undo':
+          undo();
+          break;
+
+        case 'Redo':
+          redo();
+          break;
+
+        default:
+          break;
+      }
+    },
+    [undo, redo]
+  );
+
+  // Listen to keyboard events to change the cursor state
   useEffect(() => {
     const onKeyUp = (event: KeyboardEvent) => {
       if (event.key === '/') {
@@ -212,46 +247,67 @@ const Live = ({ canvasRef }: Props) => {
   }, [updateMyPresence]);
 
   return (
-    <div
-      id='canvas'
-      onPointerMove={handlePointerMove}
-      onPointerLeave={handlePointerLeave}
-      onPointerDown={handlePointerDown}
-      onPointerUp={handlePointerUp}
-      className='h-[100vh] w-full flex justify-center items-center text-center'
-    >
-      <canvas ref={canvasRef} />
+    <ContextMenu>
+      <ContextMenuTrigger
+        id='canvas'
+        onPointerMove={handlePointerMove}
+        onPointerLeave={handlePointerLeave}
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        className='relative h-full w-full flex flex-1 justify-center items-center'
+        style={{
+          cursor: cursorState.mode === CursorMode.Chat ? 'none' : 'auto',
+        }}
+      >
+        <canvas ref={canvasRef} />
 
-      {reactions.map((reaction) => (
-        <FlyingReaction
-          key={reaction.timestamp.toString()}
-          x={reaction.point.x}
-          y={reaction.point.y}
-          timestamp={reaction.timestamp}
-          value={reaction.value}
-        />
-      ))}
+        {reactions.map((reaction) => (
+          <FlyingReaction
+            key={reaction.timestamp.toString()}
+            x={reaction.point.x}
+            y={reaction.point.y}
+            timestamp={reaction.timestamp}
+            value={reaction.value}
+          />
+        ))}
 
-      {cursor && (
-        <CursorChat
-          cursor={cursor}
-          cursorState={cursorState}
-          setCursorState={setCursorState}
-          updateMyPresence={updateMyPresence}
-        />
-      )}
+        {cursor && (
+          <CursorChat
+            cursor={cursor}
+            cursorState={cursorState}
+            setCursorState={setCursorState}
+            updateMyPresence={updateMyPresence}
+          />
+        )}
 
-      {/* If cursor is in reaction selector mode, show the reaction selector */}
-      {cursorState.mode === CursorMode.ReactionSelector && (
-        <ReactionSelector
-          setReaction={(reaction) => {
-            setReaction(reaction);
-          }}
-        />
-      )}
+        {/* If cursor is in reaction selector mode, show the reaction selector */}
+        {cursorState.mode === CursorMode.ReactionSelector && (
+          <ReactionSelector
+            setReaction={(reaction) => {
+              setReaction(reaction);
+            }}
+          />
+        )}
 
-      <LiveCursors others={others} />
-    </div>
+        <LiveCursors />
+
+        {/* Show the comments */}
+        <Comments />
+      </ContextMenuTrigger>
+
+      <ContextMenuContent className='right-menu-content'>
+        {shortcuts.map((item) => (
+          <ContextMenuItem
+            key={item.key}
+            className='right-menu-item'
+            onClick={() => handleContextMenuClick(item.name)}
+          >
+            <p>{item.name}</p>
+            <p className='text-xs text-primary-grey-300'>{item.shortcut}</p>
+          </ContextMenuItem>
+        ))}
+      </ContextMenuContent>
+    </ContextMenu>
   );
 };
 export default Live;
